@@ -1,4 +1,4 @@
-package main
+package fr010
 
 var randSeed = 31337303
 

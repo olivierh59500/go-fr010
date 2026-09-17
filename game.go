@@ -1,14 +1,18 @@
-package main
+// Package fr010 implements the FR-010 demo.
+package fr010
 
 import (
+	"log"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/audio"
 )
 
 type Game struct {
 	pixels []uint32
 	rgba   []byte
+	frame  *ebiten.Image
 
 	drawing  *Drawing
 	lineList *LineList
@@ -23,17 +27,24 @@ type Game struct {
 	scene5 *Scene3D
 	scene6 *Scene3D
 
+	audioContext  *audio.Context
+	audioPlayer   *audio.Player
 	ym            *YMPlayer
+	audioReady    bool
 	fallbackStart time.Time
 	exitRequested bool
 }
 
-const introDurationMS = 20000
+const (
+	introDurationMS = 20000
+	sampleRate      = 48000
+	maxLayoutWidth  = 1280
+)
 
 func NewGame() (*Game, error) {
 	textures := NewTextureManager(texCount)
 	drawing := NewDrawing(screenWidth, screenHeight, textures)
-	pixels := make([]uint32, screenWidth*screenHeight)
+	pixels, rgba := newPixelBuffer(screenWidth * screenHeight)
 	drawing.SetBuffer(pixels, screenWidth)
 
 	font, err := NewVectorFont()
@@ -80,14 +91,10 @@ func NewGame() (*Game, error) {
 	scene6 := NewScene3D()
 	scene6.BuildScene(stadtData)
 
-	ym, err := NewYMPlayer(ymData)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Game{
 		pixels:        pixels,
-		rgba:          make([]byte, screenWidth*screenHeight*4),
+		rgba:          rgba,
+		frame:         ebiten.NewImage(screenWidth, screenHeight),
 		drawing:       drawing,
 		lineList:      NewLineList(),
 		faceList:      NewFaceList(),
@@ -99,18 +106,34 @@ func NewGame() (*Game, error) {
 		scene4:        scene4,
 		scene5:        scene5,
 		scene6:        scene6,
-		ym:            ym,
 		fallbackStart: time.Now(),
 	}, nil
 }
 
 func (g *Game) Close() {
+	if g.audioPlayer != nil {
+		if err := g.audioPlayer.Close(); err != nil {
+			log.Printf("close audio player: %v", err)
+		}
+		g.audioPlayer = nil
+	}
 	if g.ym != nil {
-		g.ym.Close()
+		if err := g.ym.Close(); err != nil {
+			log.Printf("close YM player: %v", err)
+		}
+		g.ym = nil
 	}
 }
 
 func (g *Game) Update() error {
+	// mobile.SetGame constructs Game before Android has installed Ebitengine's
+	// context. Opening audio on the first tick avoids blocking native startup.
+	if !g.audioReady {
+		g.audioReady = true
+		g.fallbackStart = time.Now()
+		g.initAudio()
+	}
+
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
 		g.exitRequested = true
 	}
@@ -128,26 +151,58 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 	g.renderFrame(frame)
 
-	for i, p := range g.pixels {
-		idx := i * 4
-		g.rgba[idx] = byte((p >> 16) & 0xff)
-		g.rgba[idx+1] = byte((p >> 8) & 0xff)
-		g.rgba[idx+2] = byte(p & 0xff)
-		g.rgba[idx+3] = 0xff
-	}
-
-	screen.ReplacePixels(g.rgba)
+	g.frame.WritePixels(g.rgba)
+	screen.Clear()
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(float64((screen.Bounds().Dx()-screenWidth)/2), 0)
+	screen.DrawImage(g.frame, op)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
-	return screenWidth, screenHeight
+	return logicalWidth(outsideWidth, outsideHeight), screenHeight
 }
 
 func (g *Game) currentFrameMS() int {
-	if g.ym != nil {
-		return g.ym.PosMS()
+	if g.audioPlayer != nil {
+		return int(g.audioPlayer.Position().Milliseconds())
 	}
 	return int(time.Since(g.fallbackStart).Milliseconds())
+}
+
+func (g *Game) initAudio() {
+	context := audio.NewContext(sampleRate)
+	ym, err := NewYMPlayer(ymData, sampleRate, true)
+	if err != nil {
+		log.Printf("initialize YM stream: %v", err)
+		return
+	}
+
+	player, err := context.NewPlayer(ym)
+	if err != nil {
+		_ = ym.Close()
+		log.Printf("initialize Ebitengine audio: %v", err)
+		return
+	}
+
+	g.audioContext = context
+	g.audioPlayer = player
+	g.ym = ym
+	player.Play()
+}
+
+func logicalWidth(outsideWidth, outsideHeight int) int {
+	if outsideWidth <= 0 || outsideHeight <= 0 {
+		return screenWidth
+	}
+
+	width := (outsideWidth*screenHeight + outsideHeight - 1) / outsideHeight
+	if width < screenWidth {
+		return screenWidth
+	}
+	if width > maxLayoutWidth {
+		return maxLayoutWidth
+	}
+	return width
 }
 
 func (g *Game) renderFrame(frame int) {
@@ -161,7 +216,7 @@ func (g *Game) renderFrame(frame int) {
 	g.drawing.t = float32(demoFrame) * 0.001
 
 	for i := range g.pixels {
-		g.pixels[i] = 0x00ffffff
+		g.pixels[i] = opaqueWhite
 	}
 
 	g.faceList.Clear()

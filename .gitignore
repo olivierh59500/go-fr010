@@ -30,3 +30,12 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+.DS_Store
+
+# Android build products and machine-local state
+android/.gradle/
+android/build/
+android/app/build/
+android/app/libs/*.aar
+android/app/libs/*-sources.jar
+android/local.properties

@@ -1,4 +1,4 @@
-package main
+package fr010
 
 func (o *Object3D) BuildText(font *VectorFont, text string, x, y, z, size, spacing float32) {
 	if font == nil {

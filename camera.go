@@ -1,17 +1,17 @@
-package main
+package fr010
 
 import "math"
 
 type Camera struct {
-	m         Matrix
-	perspX    float32
-	perspY    float32
-	roll      float32
-	eyepoint  Vector
-	target    Vector
-	posKeys   []float32
+	m          Matrix
+	perspX     float32
+	perspY     float32
+	roll       float32
+	eyepoint   Vector
+	target     Vector
+	posKeys    []float32
 	targetKeys []float32
-	rollKeys  []float32
+	rollKeys   []float32
 }
 
 func (c *Camera) Init() {

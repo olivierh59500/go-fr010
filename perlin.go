@@ -1,18 +1,36 @@
-package main
+package fr010
 
 import "math"
 
 const (
-	perlinYWrap  = 16
-	perlinYWrapB = 4
-	perlinTWrap  = 256
-	perlinTWrapB = 8
-	perlinOctave = 2
-	perlinIBuf   = 1 << 16
+	perlinYWrap   = 16
+	perlinYWrapB  = 4
+	perlinTWrap   = 256
+	perlinTWrapB  = 8
+	perlinOctave  = 2
+	perlinIBuf    = 1 << 16
+	fadeTableBits = 10
+	fadeTableSize = 1 << fadeTableBits
 )
 
+var fadeTable = func() [fadeTableSize + 1]float32 {
+	var table [fadeTableSize + 1]float32
+	for i := range table {
+		x := float64(i) / fadeTableSize
+		table[i] = 0.5 * (1 - float32(math.Cos(x*math.Pi)))
+	}
+	return table
+}()
+
 func fsc(i float32) float32 {
-	return 0.5 * (1 - float32(math.Cos(float64(i*3.1415926535))))
+	if i <= 0 {
+		return 0
+	}
+	if i >= 1 {
+		return 1
+	}
+
+	return fadeTable[int(i*fadeTableSize+0.5)]
 }
 
 type Perlin struct {
@@ -70,35 +88,12 @@ func (p *Perlin) Get2D(x, y float32) float32 {
 	yi := int(y)
 	var r float32
 	ampl := float32(0.5)
-	xf := x - float32(xi)
-	yf := y - float32(yi)
-
-	xf, yf = 0, 0
-
 	for i := 0; i < perlinOctave; i++ {
 		of := xi + (yi << perlinYWrapB)
-		rxf := fsc(xf)
-
-		n1 := p.buffer[of&4095]
-		n1 += rxf * (p.buffer[(of+1)&4095] - n1)
-		n2 := p.buffer[(of+perlinYWrap)&4095]
-		n2 += rxf * (p.buffer[(of+perlinYWrap+1)&4095] - n2)
-		n1 += fsc(yf) * (n2 - n1)
-
-		r += n1 * ampl
+		r += p.buffer[of&4095] * ampl
 		ampl *= 0.5
-		xf *= 2
 		xi <<= 1
-		yf *= 2
 		yi <<= 1
-		if xf >= 1.0 {
-			xi++
-			xf -= 1.0
-		}
-		if yf >= 1.0 {
-			yi++
-			yf -= 1.0
-		}
 	}
 	return r
 }

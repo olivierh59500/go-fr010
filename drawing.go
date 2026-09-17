@@ -1,8 +1,16 @@
-package main
+package fr010
 
 import "math"
 
-const lineDarken = 0x60606060
+const lineDarken = 0x60
+
+var darkenedComponent = func() [256]uint32 {
+	var table [256]uint32
+	for i := range table {
+		table[i] = uint32(max(i-lineDarken, 0))
+	}
+	return table
+}()
 
 var textLine bool
 
@@ -79,12 +87,12 @@ func (d *Drawing) DrawLine(a, b Vector) {
 		tf *= 2.2
 	}
 
-	b.X += (d.perlin.Get3D(b.X*0.01, b.Y*0.01, d.t*1.3*tf)-0.5) * 0.5 * maxd
-	b.Y += (d.perlin.Get3D(b.Y*0.01, b.X*0.01, d.t*1.4*tf)-0.5) * 0.5 * maxd
-	a.X += (d.perlin.Get3D(a.X*0.01, a.Y*0.01, d.t*1.3*tf)-0.5) * 0.5 * maxd
-	a.Y += (d.perlin.Get3D(a.Y*0.01, a.X*0.01, d.t*1.4*tf)-0.5) * 0.5 * maxd
-	a.X += (d.perlin.Get2D(a.X*0.01, a.Y*0.01)-0.5) * maxd
-	a.Y += (d.perlin.Get2D(a.Y*0.01, a.X*0.01)-0.5) * maxd
+	b.X += (d.perlin.Get3D(b.X*0.01, b.Y*0.01, d.t*1.3*tf) - 0.5) * 0.5 * maxd
+	b.Y += (d.perlin.Get3D(b.Y*0.01, b.X*0.01, d.t*1.4*tf) - 0.5) * 0.5 * maxd
+	a.X += (d.perlin.Get3D(a.X*0.01, a.Y*0.01, d.t*1.3*tf) - 0.5) * 0.5 * maxd
+	a.Y += (d.perlin.Get3D(a.Y*0.01, a.X*0.01, d.t*1.4*tf) - 0.5) * 0.5 * maxd
+	a.X += (d.perlin.Get2D(a.X*0.01, a.Y*0.01) - 0.5) * maxd
+	a.Y += (d.perlin.Get2D(a.Y*0.01, a.X*0.01) - 0.5) * maxd
 
 	for i = 0; i < 4; i++ {
 		delta = a.Sub(b)
@@ -100,7 +108,7 @@ func (d *Drawing) DrawLine(a, b Vector) {
 			shift := (d.perlin.Get(float32(j)*0.1) - 0.5) * 0.303
 			k.X += shift * -step.Y
 			k.Y += shift * step.X
-			d.DDBresenhamLine(ok.X, ok.Y, k.X, k.Y, lineDarken)
+			d.drawBresenhamLine(ok.X, ok.Y, k.X, k.Y)
 		}
 		for j = 0; j < subdivs/2; j++ {
 			ok := k
@@ -108,11 +116,11 @@ func (d *Drawing) DrawLine(a, b Vector) {
 			shift := (d.perlin.Get(float32(j)*0.1) - 0.5) * 0.303
 			k.X += shift * step.Y
 			k.Y += shift * -step.X
-			d.DDBresenhamLine(ok.X, ok.Y, k.X, k.Y, lineDarken)
+			d.drawBresenhamLine(ok.X, ok.Y, k.X, k.Y)
 		}
 
-		b.X += (d.perlin.Get3D(b.X*0.01, b.Y*0.01, float32(i)*0.1*tf)-0.5) * step.X * 0.01707
-		b.Y += (d.perlin.Get3D(b.Y*0.01, b.X*0.01, float32(i)*0.1*tf)-0.5) * step.Y * 0.01707
+		b.X += (d.perlin.Get3D(b.X*0.01, b.Y*0.01, float32(i)*0.1*tf) - 0.5) * step.X * 0.01707
+		b.Y += (d.perlin.Get3D(b.Y*0.01, b.X*0.01, float32(i)*0.1*tf) - 0.5) * step.Y * 0.01707
 	}
 }
 
@@ -197,21 +205,27 @@ func (d *Drawing) drawFace(f *DrawFaceObj) {
 		x1 := ceil16r(d.lx)
 		w := ceil16r(d.rx) - x1
 
-		if w > 0 {
+		if w > 0 && vbuffer >= 0 && vbuffer+d.width <= len(d.vscreen) {
 			prestep := (x1 << 16) - d.lx
 			u := d.lu + imul16(prestep, d.tdu)
 			v := d.lv + imul16(prestep, d.tdv)
 			end := x1 + w
+			if x1 < 0 {
+				delta := -x1
+				u += delta * d.tdu
+				v += delta * d.tdv
+				x1 = 0
+			}
+			if end > d.width {
+				end = d.width
+			}
 
+			row := d.vscreen[vbuffer : vbuffer+d.width]
 			for x := x1; x < end; x++ {
 				tu := uint32(u)
 				tv := uint32(v)
 				texIndex := int(((tu >> 16) & 0x00ff) | ((tv >> 8) & 0xff00))
-				c := col[tex[texIndex]]
-				idx := vbuffer + x
-				if idx >= 0 && idx < len(d.vscreen) {
-					d.vscreen[idx] = c
-				}
+				row[x] = col[tex[texIndex]]
 				u += d.tdu
 				v += d.tdv
 			}
@@ -303,7 +317,7 @@ func (d *Drawing) leftSide() {
 	d.l_eck = index
 }
 
-func (d *Drawing) DDBresenhamLine(x0, y0, x1, y1 float32, value uint32) {
+func (d *Drawing) drawBresenhamLine(x0, y0, x1, y1 float32) {
 	if x0 < 1 {
 		x0 = 1
 	}
@@ -333,7 +347,15 @@ func (d *Drawing) DDBresenhamLine(x0, y0, x1, y1 float32, value uint32) {
 		return
 	}
 
-	if math.Abs(float64(x1-x0)) > math.Abs(float64(y1-y0)) {
+	absDX := x1 - x0
+	if absDX < 0 {
+		absDX = -absDX
+	}
+	absDY := y1 - y0
+	if absDY < 0 {
+		absDY = -absDY
+	}
+	if absDX > absDY {
 		if y0 < y1 {
 			x0, x1 = x1, x0
 			y0, y1 = y1, y0
@@ -376,7 +398,7 @@ func (d *Drawing) DDBresenhamLine(x0, y0, x1, y1 float32, value uint32) {
 				offset += incre
 				error -= dyi
 			}
-			d.darkenPixel(offset, value)
+			d.vscreen[offset] = darkenColor(d.vscreen[offset])
 		}
 	} else {
 		offset := x + y*d.pitch
@@ -389,29 +411,16 @@ func (d *Drawing) DDBresenhamLine(x0, y0, x1, y1 float32, value uint32) {
 				offset += incrne
 				error -= dxi
 			}
-			d.darkenPixel(offset, value)
+			d.vscreen[offset] = darkenColor(d.vscreen[offset])
 		}
 	}
 }
 
-func (d *Drawing) darkenPixel(offset int, value uint32) {
-	if offset < 0 || offset >= len(d.vscreen) {
-		return
-	}
-	p := d.vscreen[offset]
-	r := int((p>>16)&0xff) - int((value>>16)&0xff)
-	g := int((p>>8)&0xff) - int((value>>8)&0xff)
-	b := int(p&0xff) - int(value&0xff)
-	if r < 0 {
-		r = 0
-	}
-	if g < 0 {
-		g = 0
-	}
-	if b < 0 {
-		b = 0
-	}
-	d.vscreen[offset] = uint32((r << 16) | (g << 8) | b)
+func darkenColor(pixel uint32) uint32 {
+	return opaqueAlpha |
+		darkenedComponent[byte(pixel)] |
+		darkenedComponent[byte(pixel>>8)]<<8 |
+		darkenedComponent[byte(pixel>>16)]<<16
 }
 
 func ceil16r(x int) int {

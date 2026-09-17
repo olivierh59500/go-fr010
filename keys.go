@@ -1,4 +1,4 @@
-package main
+package fr010
 
 var scene1CamKeys = []float32{
 	0, 0, 0, -30,

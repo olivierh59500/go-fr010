@@ -1,6 +1,6 @@
-package main
+package fr010
 
-import "sort"
+import "slices"
 
 func (ll *LineList) DoClip(fl *FaceList) {
 	if ll.count < 1 {
@@ -211,40 +211,29 @@ func (ll *LineList) DoClip(fl *FaceList) {
 			s := ll.count
 			for t := 0; t < s; t++ {
 				l := dl[t]
-				if l.visible && l.maxZ > f.minZ {
+				if l.visible && l.maxZ > f.minZ &&
+					!((l.x1 < f.minx && l.x2 < f.minx) ||
+						(l.x1 > f.maxx && l.x2 > f.maxx) ||
+						(l.y1 < f.miny && l.y2 < f.miny) ||
+						(l.y1 > f.maxy && l.y2 > f.maxy)) {
 					bo := true
-					if (l.x1 < f.minx) && (l.x2 < f.minx) {
-						bo = false
-					}
-					if (l.x1 > f.maxx) && (l.x2 > f.maxx) {
-						bo = false
-					}
-					if (l.y1 < f.miny) && (l.y2 < f.miny) {
-						bo = false
-					}
-					if (l.y1 > f.maxy) && (l.y2 > f.maxy) {
-						bo = false
-					}
-
-					if bo {
-						for i := 0; i < f.lcount && bo; i++ {
-							bo = f.l[i] != l
-						}
+					for i := 0; i < f.lcount && bo; i++ {
+						bo = f.l[i] != l
 					}
 
 					const eps = 1e-5
 					const imeps = 1.0 - eps
 
 					if bo {
-						b0 := 1.0 / (((f.x2-f.x1)*(f.y3-f.y1)) - ((f.x3-f.x1)*(f.y2-f.y1)))
-						b1 := (((f.x2-l.x1)*(f.y3-l.y1)) - ((f.x3-l.x1)*(f.y2-l.y1))) * b0
-						b2 := (((f.x3-l.x1)*(f.y1-l.y1)) - ((f.x1-l.x1)*(f.y3-l.y1))) * b0
-						b3 := (((f.x1-l.x1)*(f.y2-l.y1)) - ((f.x2-l.x1)*(f.y1-l.y1))) * b0
+						b0 := 1.0 / (((f.x2 - f.x1) * (f.y3 - f.y1)) - ((f.x3 - f.x1) * (f.y2 - f.y1)))
+						b1 := (((f.x2 - l.x1) * (f.y3 - l.y1)) - ((f.x3 - l.x1) * (f.y2 - l.y1))) * b0
+						b2 := (((f.x3 - l.x1) * (f.y1 - l.y1)) - ((f.x1 - l.x1) * (f.y3 - l.y1))) * b0
+						b3 := (((f.x1 - l.x1) * (f.y2 - l.y1)) - ((f.x2 - l.x1) * (f.y1 - l.y1))) * b0
 						ins1 := (b1 > -eps) && (b2 > -eps) && (b3 > -eps)
 
-						b1 = (((f.x2-l.x2)*(f.y3-l.y2)) - ((f.x3-l.x2)*(f.y2-l.y2))) * b0
-						b2 = (((f.x3-l.x2)*(f.y1-l.y2)) - ((f.x1-l.x2)*(f.y3-l.y2))) * b0
-						b3 = (((f.x1-l.x2)*(f.y2-l.y2)) - ((f.x2-l.x2)*(f.y1-l.y2))) * b0
+						b1 = (((f.x2 - l.x2) * (f.y3 - l.y2)) - ((f.x3 - l.x2) * (f.y2 - l.y2))) * b0
+						b2 = (((f.x3 - l.x2) * (f.y1 - l.y2)) - ((f.x1 - l.x2) * (f.y3 - l.y2))) * b0
+						b3 = (((f.x1 - l.x2) * (f.y2 - l.y2)) - ((f.x2 - l.x2) * (f.y1 - l.y2))) * b0
 						ins2 := (b1 > -eps) && (b2 > -eps) && (b3 > -eps)
 
 						y4y3 := l.y2 - l.y1
@@ -256,7 +245,7 @@ func (ll *LineList) DoClip(fl *FaceList) {
 						if (q1 != 0.0) && ((x2x1 != 0.0) || (y2y1 != 0.0)) {
 							y3y1 := l.y1 - f.y1
 							x3x1 := l.x1 - f.x1
-							b1 = ((x3x1*y2y1)-(y3y1*x2x1)) / q1
+							b1 = ((x3x1 * y2y1) - (y3y1 * x2x1)) / q1
 							var a1 float64
 							if x2x1 != 0 {
 								a1 = (x3x1 + (b1 * x4x3)) / x2x1
@@ -277,7 +266,7 @@ func (ll *LineList) DoClip(fl *FaceList) {
 						if (q2 != 0.0) && ((x2x1 != 0.0) || (y2y1 != 0.0)) {
 							y3y1 := l.y1 - f.y2
 							x3x1 := l.x1 - f.x2
-							b2 = ((x3x1*y2y1)-(y3y1*x2x1)) / q2
+							b2 = ((x3x1 * y2y1) - (y3y1 * x2x1)) / q2
 							var a2 float64
 							if x2x1 != 0 {
 								a2 = (x3x1 + (b2 * x4x3)) / x2x1
@@ -298,7 +287,7 @@ func (ll *LineList) DoClip(fl *FaceList) {
 						if (q3 != 0.0) && ((x2x1 != 0.0) || (y2y1 != 0.0)) {
 							y3y1 := l.y1 - f.y3
 							x3x1 := l.x1 - f.x3
-							b3 = ((x3x1*y2y1)-(y3y1*x2x1)) / q3
+							b3 = ((x3x1 * y2y1) - (y3y1 * x2x1)) / q3
 							var a3 float64
 							if x2x1 != 0 {
 								a3 = (x3x1 + (b3 * x4x3)) / x2x1
@@ -1379,14 +1368,28 @@ func (fl *FaceList) DoClip(mz bool) {
 }
 
 func (fl *FaceList) sortMax() {
-	sort.Slice(fl.dl[:fl.count], func(i, j int) bool {
-		return fl.dl[i].maxZ > fl.dl[j].maxZ
+	slices.SortFunc(fl.dl[:fl.count], func(a, b *DrawFaceObj) int {
+		switch {
+		case a.maxZ > b.maxZ:
+			return -1
+		case a.maxZ < b.maxZ:
+			return 1
+		default:
+			return 0
+		}
 	})
 }
 
 func (fl *FaceList) sortMin() {
-	sort.Slice(fl.dl[:fl.count], func(i, j int) bool {
-		return fl.dl[i].minZ > fl.dl[j].minZ
+	slices.SortFunc(fl.dl[:fl.count], func(a, b *DrawFaceObj) int {
+		switch {
+		case a.minZ > b.minZ:
+			return -1
+		case a.minZ < b.minZ:
+			return 1
+		default:
+			return 0
+		}
 	})
 }
 

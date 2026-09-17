@@ -1,4 +1,4 @@
-package main
+package fr010
 
 type PastelColor struct {
 	ColorMap [256]uint32
@@ -19,7 +19,7 @@ func NewPastelColor(v Vector) *PastelColor {
 		if b < 0 {
 			b = 0
 		}
-		pc.ColorMap[i] = uint32((r << 16) | (g << 8) | b)
+		pc.ColorMap[i] = packRGB(r, g, b)
 	}
 	return pc
 }

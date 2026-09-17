@@ -1,4 +1,4 @@
-package main
+package fr010
 
 type DrawFaceObj struct {
 	x1, x2, x3 float64
@@ -18,11 +18,11 @@ type DrawFaceObj struct {
 }
 
 type DrawLineObj struct {
-	x1, x2 float64
-	y1, y2 float64
-	z1, z2 float64
-	minZ   float64
-	maxZ   float64
+	x1, x2  float64
+	y1, y2  float64
+	z1, z2  float64
+	minZ    float64
+	maxZ    float64
 	visible bool
 }
 

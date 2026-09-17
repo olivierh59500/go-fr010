@@ -1,4 +1,4 @@
-package main
+package fr010
 
 func absInt(v int) int {
 	if v < 0 {

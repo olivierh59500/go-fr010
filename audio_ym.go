@@ -1,94 +1,87 @@
-package main
+package fr010
 
 import (
+	"fmt"
+	"io"
 	"sync"
 
-	"github.com/olivierh59500/ym-player/pkg/audio"
 	"github.com/olivierh59500/ym-player/pkg/stsound"
 )
 
-const (
-	ymSampleRate = 44100
-	ymBufferSize = 2048
-)
+const ymBufferSize = 4096
 
+// YMPlayer adapts StSound's mono samples to the stereo PCM stream expected by
+// Ebitengine. Its working buffer is reused for every Read.
 type YMPlayer struct {
-	st        *stsound.StSound
-	output    audio.Output
-	buffer    []int16
-	stop      chan struct{}
-	done      chan struct{}
-	closeOnce sync.Once
+	player *stsound.StSound
+	buffer []int16
+	mutex  sync.Mutex
+	loop   bool
 }
 
-func NewYMPlayer(data []byte) (*YMPlayer, error) {
-	st := stsound.CreateWithRate(ymSampleRate)
-	if err := st.LoadMemory(data); err != nil {
-		st.Destroy()
-		return nil, err
-	}
-	st.SetLoopMode(false)
-	st.SetLowpassFilter(true)
-
-	var out audio.Output
-	out, err := audio.NewStreamingOtoOutput()
-	if err != nil {
-		out, err = audio.NewFallbackOutput()
-		if err != nil {
-			st.Destroy()
-			return nil, err
-		}
-	}
-	if err := out.Open(ymSampleRate, 1, ymBufferSize); err != nil {
-		st.Destroy()
-		return nil, err
+func NewYMPlayer(data []byte, sampleRate int, loop bool) (*YMPlayer, error) {
+	player := stsound.CreateWithRate(sampleRate)
+	if err := player.LoadMemory(data); err != nil {
+		player.Destroy()
+		return nil, fmt.Errorf("load YM data: %w", err)
 	}
 
-	p := &YMPlayer{
-		st:     st,
-		output: out,
+	player.SetLoopMode(loop)
+	player.SetLowpassFilter(true)
+
+	return &YMPlayer{
+		player: player,
 		buffer: make([]int16, ymBufferSize),
-		stop:   make(chan struct{}),
-		done:   make(chan struct{}),
-	}
-
-	go p.loop()
-	return p, nil
+		loop:   loop,
+	}, nil
 }
 
-func (p *YMPlayer) loop() {
-	defer close(p.done)
-	p.st.Play()
-	for {
-		select {
-		case <-p.stop:
-			return
-		default:
+func (y *YMPlayer) Read(p []byte) (int, error) {
+	y.mutex.Lock()
+	defer y.mutex.Unlock()
+
+	if y.player == nil {
+		return 0, io.EOF
+	}
+
+	// Ebitengine consumes signed 16-bit little-endian stereo frames.
+	frameCount := len(p) / 4
+	processed := 0
+	var readErr error
+	for processed < frameCount {
+		chunkSize := min(frameCount-processed, len(y.buffer))
+		if !y.player.Compute(y.buffer[:chunkSize], chunkSize) && !y.loop {
+			clear(p[processed*4 : frameCount*4])
+			readErr = io.EOF
+			break
 		}
 
-		if !p.st.Compute(p.buffer, len(p.buffer)) {
-			return
+		for i, mono := range y.buffer[:chunkSize] {
+			sample := mono / 2
+			offset := (processed + i) * 4
+			low := byte(sample)
+			high := byte(sample >> 8)
+			p[offset] = low
+			p[offset+1] = high
+			p[offset+2] = low
+			p[offset+3] = high
 		}
-
-		_ = p.output.Write(p.buffer)
+		processed += chunkSize
 	}
+
+	return frameCount * 4, readErr
 }
 
-func (p *YMPlayer) PosMS() int {
-	if p == nil || p.st == nil {
-		return 0
+func (y *YMPlayer) Close() error {
+	if y == nil {
+		return nil
 	}
-	return int(p.st.GetPos())
-}
 
-func (p *YMPlayer) Close() {
-	if p == nil {
-		return
+	y.mutex.Lock()
+	defer y.mutex.Unlock()
+	if y.player != nil {
+		y.player.Destroy()
+		y.player = nil
 	}
-	p.closeOnce.Do(func() {
-		close(p.stop)
-		<-p.done
-		_ = p.output.Close()
-		p.st.Destroy()
-	})
+	return nil
 }

@@ -1,19 +1,16 @@
-package main
+package fr010
 
 type TexCoord struct {
 	U, V int
 }
 
 type Face struct {
-	pIndex [3]int
-	tc     [3]TexCoord
-	count  int
-	visible bool
+	pIndex      [3]int
+	tc          [3]TexCoord
+	visible     bool
 	theDrawFace *DrawFaceObj
-	n      Vector
-	wn     Vector
-	col    *PastelColor
-	texNum int
+	col         *PastelColor
+	texNum      int
 }
 
 type Line struct {
@@ -25,15 +22,12 @@ type Line struct {
 type Vertex struct {
 	os Vector
 	ws Vector
-	ss Vector
 }
 
 type Object3D struct {
 	pVert  []Vertex
 	pFaces []Face
 	pLines []Line
-	rot    Quaternion
-	trans  Vector
 	m      Matrix
 }
 
@@ -89,7 +83,6 @@ func (o *Object3D) BuildCube(size float32) {
 	o.pLines[9] = newLine(6, 2, &o.pFaces[5], &o.pFaces[10])
 	o.pLines[10] = newLine(3, 7, &o.pFaces[7], &o.pFaces[11])
 	o.pLines[11] = newLine(0, 4, &o.pFaces[6], &o.pFaces[9])
-	o.MakeNormals()
 	o.m.Identity()
 }
 
@@ -251,21 +244,9 @@ func (o *Object3D) Draw(ll *LineList, fl *FaceList) {
 	}
 }
 
-func (o *Object3D) MakeNormals() {
-	for i := range o.pFaces {
-		f := &o.pFaces[i]
-		v0 := o.pVert[f.pIndex[0]].ws
-		v1 := o.pVert[f.pIndex[1]].ws
-		v2 := o.pVert[f.pIndex[2]].ws
-		f.n = v1.Sub(v0).Cross(v2.Sub(v0))
-		f.n.Normalize()
-	}
-}
-
 func newFace(a, b, c int, col Vector, t1, t2, t3 TexCoord, tex int) Face {
 	return Face{
 		pIndex: [3]int{a, b, c},
-		count:  3,
 		tc:     [3]TexCoord{t1, t2, t3},
 		col:    NewPastelColor(col),
 		texNum: tex,

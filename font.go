@@ -1,6 +1,7 @@
 package fr010
 
 import (
+	"github.com/olivierh59500/democonstructionkit/outline"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
@@ -141,42 +142,11 @@ func (f *VectorFont) point(p fixed.Point26_6) Vector {
 }
 
 func (f *VectorFont) flattenSegments(segments sfnt.Segments) []LineSegment {
-	var lines []LineSegment
-	var start Vector
-	var prev Vector
-	hasContour := false
-
-	for _, seg := range segments {
-		switch seg.Op {
-		case sfnt.SegmentOpMoveTo:
-			if hasContour {
-				lines = appendLineSegment(lines, prev, start)
-			}
-			start = f.point(seg.Args[0])
-			prev = start
-			hasContour = true
-		case sfnt.SegmentOpLineTo:
-			p := f.point(seg.Args[0])
-			lines = appendLineSegment(lines, prev, p)
-			prev = p
-		case sfnt.SegmentOpQuadTo:
-			c := f.point(seg.Args[0])
-			p := f.point(seg.Args[1])
-			lines = appendQuad(lines, prev, c, p)
-			prev = p
-		case sfnt.SegmentOpCubeTo:
-			c1 := f.point(seg.Args[0])
-			c2 := f.point(seg.Args[1])
-			p := f.point(seg.Args[2])
-			lines = appendCube(lines, prev, c1, c2, p)
-			prev = p
-		}
+	flattened := outline.Flatten32(segments, outline.FlattenConfig{Scale: f.scale, CurveStep: curveStep, CloseEpsilon: closeEpsilon, MaxSegments: maxCurveSegments})
+	lines := make([]LineSegment, len(flattened))
+	for i, line := range flattened {
+		lines[i] = LineSegment{A: Vector{X: line.A.X, Y: line.A.Y}, B: Vector{X: line.B.X, Y: line.B.Y}}
 	}
-
-	if hasContour {
-		lines = appendLineSegment(lines, prev, start)
-	}
-
 	return lines
 }
 

@@ -1,5 +1,7 @@
 package fr010
 
+import "github.com/olivierh59500/democonstructionkit/motion"
+
 const texCount = 64
 
 type Scene3D struct {
@@ -35,10 +37,10 @@ func (s *Scene3D) BuildScene(data []byte) {
 
 func (s *Scene3D) DrawScene(frame float32, ll *LineList, fl *FaceList) {
 	if len(s.cam.posKeys) > 0 {
-		applySpline(s.cam.posKeys, frame, &s.cam.eyepoint)
+		applySpline(&s.cam.posTrack, s.cam.posKeys, frame, &s.cam.eyepoint)
 	}
 	if len(s.cam.targetKeys) > 0 {
-		applySpline(s.cam.targetKeys, frame, &s.cam.target)
+		applySpline(&s.cam.targetTrack, s.cam.targetKeys, frame, &s.cam.target)
 	}
 
 	s.cam.Camera2Matrix()
@@ -93,42 +95,18 @@ func (s *Scene3D) BuildGreetingScene(font *VectorFont, text string, x, y, z, siz
 	s.objects = append(s.objects, obj)
 }
 
-func spline(keyArray []float32, curFrame float32, out []float32, numFloats int) {
-	stride := numFloats + 1
-	if len(keyArray) < stride*4 {
-		return
+// applySpline compiles the authored camera track once and preserves its original
+// float32 B-spline interpolation, including extrapolation outside key times.
+func applySpline(track **motion.BSpline32, keys []float32, frame float32, out *Vector) {
+	if *track == nil {
+		compiled, err := motion.NewBSpline32(keys, 3)
+		if err != nil {
+			panic(err)
+		}
+		*track = compiled
 	}
-
-	keys := 0
-	maxStart := (len(keyArray)/stride - 4) * stride
-	for keys+stride < len(keyArray) && keyArray[keys+stride] < curFrame {
-		keys += stride
+	var value [3]float32
+	if (*track).Sample(value[:], frame) {
+		out.X, out.Y, out.Z = value[0], value[1], value[2]
 	}
-	if keys > maxStart {
-		keys = maxStart
-	}
-
-	spT := (curFrame - keyArray[keys]) / (keyArray[keys+stride] - keyArray[keys])
-	spT2 := spT * spT
-	spT3 := spT2 * spT
-
-	k1 := ((-1.0 / 6.0) * spT3) + (0.5 * spT2) - (0.5 * spT) + (1.0 / 6.0)
-	k2 := (0.5 * spT3) - spT2 + (2.0 / 3.0)
-	k3 := ((-0.5) * spT3) + (0.5 * spT2) + (0.5 * spT) + (1.0 / 6.0)
-	k4 := (1.0 / 6.0) * spT3
-
-	for i := 0; i < numFloats; i++ {
-		out[i] = keyArray[keys+i+1]*k1 +
-			keyArray[keys+i+1+stride]*k2 +
-			keyArray[keys+i+1+stride*2]*k3 +
-			keyArray[keys+i+1+stride*3]*k4
-	}
-}
-
-func applySpline(keys []float32, frame float32, out *Vector) {
-	var tmp [3]float32
-	spline(keys, frame, tmp[:], 3)
-	out.X = tmp[0]
-	out.Y = tmp[1]
-	out.Z = tmp[2]
 }

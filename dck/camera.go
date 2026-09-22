@@ -1,17 +1,21 @@
 package fr010
 
-import "math"
+import (
+	"github.com/olivierh59500/democonstructionkit/motion"
+	"math"
+)
 
 type Camera struct {
-	m          Matrix
-	perspX     float32
-	perspY     float32
-	roll       float32
-	eyepoint   Vector
-	target     Vector
-	posKeys    []float32
-	targetKeys []float32
-	rollKeys   []float32
+	m                     Matrix
+	perspX                float32
+	perspY                float32
+	roll                  float32
+	eyepoint              Vector
+	target                Vector
+	posKeys               []float32
+	targetKeys            []float32
+	rollKeys              []float32
+	posTrack, targetTrack *motion.BSpline32
 }
 
 func (c *Camera) Init() {
@@ -73,9 +77,11 @@ func (c *Camera) BuildCamKeys(r *binReader) {
 	l3 := int(r.readU16())
 	if l1 > 0 {
 		c.posKeys = r.readF32Slice(l1 * 4)
+		c.posTrack = nil
 	}
 	if l2 > 0 {
 		c.targetKeys = r.readF32Slice(l2 * 4)
+		c.targetTrack = nil
 	}
 	if l3 > 0 {
 		c.rollKeys = r.readF32Slice(l3 * 2)

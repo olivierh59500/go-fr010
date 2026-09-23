@@ -1,14 +1,17 @@
 package fr010
 
-import "testing"
+import (
+	"github.com/olivierh59500/democonstructionkit/sound"
+	"testing"
+)
 
-func BenchmarkYMPlayerRead4096(b *testing.B) {
-	player, err := NewYMPlayer(ymData, sampleRate, true)
+func BenchmarkMusicRead4096(b *testing.B) {
+	player, err := sound.Open("soundtrack.ym", ymData, sound.Options{SampleRate: sampleRate, PCMFormat: sound.PCM16, Loop: true, Gain: .5})
 	if err != nil {
 		b.Fatal(err)
 	}
 	b.Cleanup(func() { _ = player.Close() })
-	buffer := make([]byte, ymBufferSize*4)
+	buffer := make([]byte, 4096*4)
 
 	b.SetBytes(int64(len(buffer)))
 	b.ReportAllocs()

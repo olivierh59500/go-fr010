@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/olivierh59500/democonstructionkit/sound"
 	audio "github.com/olivierh59500/democonstructionkit/sound/output"
 )
 
@@ -29,7 +30,7 @@ type Game struct {
 
 	audioContext  *audio.Context
 	audioPlayer   *audio.Player
-	ym            *YMPlayer
+	musicStream   *sound.Stream
 	audioReady    bool
 	fallbackStart time.Time
 	exitRequested bool
@@ -117,11 +118,11 @@ func (g *Game) Close() {
 		}
 		g.audioPlayer = nil
 	}
-	if g.ym != nil {
-		if err := g.ym.Close(); err != nil {
-			log.Printf("close YM player: %v", err)
+	if g.musicStream != nil {
+		if err := g.musicStream.Close(); err != nil {
+			log.Printf("close soundtrack: %v", err)
 		}
-		g.ym = nil
+		g.musicStream = nil
 	}
 }
 
@@ -171,22 +172,23 @@ func (g *Game) currentFrameMS() int {
 
 func (g *Game) initAudio() {
 	context := audio.NewContext(sampleRate)
-	ym, err := NewYMPlayer(ymData, sampleRate, true)
+	lowpass := true
+	music, err := sound.Open("soundtrack.ym", ymData, sound.Options{SampleRate: sampleRate, PCMFormat: sound.PCM16, Loop: true, Gain: .5, Lowpass: &lowpass})
 	if err != nil {
-		log.Printf("initialize YM stream: %v", err)
+		log.Printf("initialize soundtrack: %v", err)
 		return
 	}
 
-	player, err := context.NewPlayer(ym)
+	player, err := context.NewPlayer(music)
 	if err != nil {
-		_ = ym.Close()
+		_ = music.Close()
 		log.Printf("initialize Ebitengine audio: %v", err)
 		return
 	}
 
 	g.audioContext = context
 	g.audioPlayer = player
-	g.ym = ym
+	g.musicStream = music
 	player.Play()
 }
 

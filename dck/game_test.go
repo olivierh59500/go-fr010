@@ -2,6 +2,7 @@ package fr010
 
 import (
 	"encoding/binary"
+	"github.com/olivierh59500/democonstructionkit/sound"
 	"math"
 	"testing"
 )
@@ -42,8 +43,8 @@ func TestFadeTableAccuracy(t *testing.T) {
 	}
 }
 
-func TestYMPlayerReadProducesStereoWithoutAllocating(t *testing.T) {
-	player, err := NewYMPlayer(ymData, sampleRate, true)
+func TestMusicReadProducesStereoWithoutAllocating(t *testing.T) {
+	player, err := sound.Open("soundtrack.ym", ymData, sound.Options{SampleRate: sampleRate, PCMFormat: sound.PCM16, Loop: true, Gain: .5})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +54,7 @@ func TestYMPlayerReadProducesStereoWithoutAllocating(t *testing.T) {
 		}
 	})
 
-	buffer := make([]byte, ymBufferSize*4)
+	buffer := make([]byte, 4096*4)
 	read := func() {
 		n, err := player.Read(buffer)
 		if err != nil {
